@@ -1,5 +1,7 @@
 # Persistent Sprint Queue (#410 points 1-3) Implementation Plan
 
+> **Approval doc (send this to Akhil, not this file):** `docs/proposals/issue-410-persistent-sprint-queue.md`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the fleet supervisor a durable sprint queue: zero-member PENDING creation, opt-in WAITING instead of 409 when members are busy, deterministic pick-next when capacity appears, and human-controllable ordering.

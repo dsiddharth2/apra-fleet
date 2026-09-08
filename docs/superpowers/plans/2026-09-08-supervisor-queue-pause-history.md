@@ -1,5 +1,7 @@
 # Sprint Queue Pause, Resume, History, Clone (#410 points 4-5) Implementation Plan
 
+> **Approval doc (send this to Akhil, not this file):** `docs/proposals/issue-410-persistent-sprint-queue.md` (slice B)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Wrap the existing engine pause/resume primitive so a running sprint can free its members into the queue, resume later (possibly on a different member) without resetting budget, and expose history browsing plus clone/relaunch on the dashboard with RUNNING edits rejected server-side.

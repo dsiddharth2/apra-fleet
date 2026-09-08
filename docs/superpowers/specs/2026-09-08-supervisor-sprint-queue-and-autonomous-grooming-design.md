@@ -1,8 +1,16 @@
 # Supervisor persistent sprint queue + autonomous backlog grooming -- design
 
 Date: 2026-09-08
-Status: draft (planning). Covers GitHub issues #410 (mechanism) and #22 (decision-making).
+Status: draft (engineering detail). Covers GitHub issues #410 (mechanism) and #22 (decision-making).
 Authors: planning pass for assignee Siddharth Deshpande (assigned by Akhil Kumar).
+
+**Akhil review lives in `docs/proposals/`**, not here:
+
+- Cover / how the system works: `docs/proposals/README.md`
+- Approval plan for #410: `docs/proposals/issue-410-persistent-sprint-queue.md`
+- Approval plan for #22: `docs/proposals/issue-22-autonomous-backlog-grooming.md`
+
+This file is the longer internal design behind those two plans.
 
 ## 1. Why these two issues are one program of work
 

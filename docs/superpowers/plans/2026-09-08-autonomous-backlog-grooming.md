@@ -1,5 +1,7 @@
 # Autonomous Backlog Grooming Pipeline (#22) Implementation Plan
 
+> **Approval doc (send this to Akhil, not this file):** `docs/proposals/issue-22-autonomous-backlog-grooming.md`
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Turn backlog-groomer from an advice-only agent into the producer of queued sprints: capacity-aware, quality-bar-gated, idempotent POSTs to the supervisor queue, run on a cadence with delivery tracking.
