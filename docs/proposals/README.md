@@ -51,18 +51,22 @@ Today that API is **launch now, or fail**:
   per-sprint page, not as a queue or a "run this again" list.
 
 Separately, there is a **backlog-groomer** agent
-(`packages/apra-fleet-se/apra-pm/agents/backlog-groomer.md`). It already
-knows how to look at one person's assigned beads and say:
+(`packages/apra-fleet-se/apra-pm/agents/backlog-groomer.md`). This is not a
+component to be designed -- it is a working agent today, with **full beads
+mutation authority**. On one operator's assigned beads it merges duplicates,
+closes or defers stale items, reprioritizes, reparents and fixes bad edges
+(every mutation evidence-gated), proposes cohesive sprint sets from
+interdependencies, flags high-priority items too thin to act on, and
+verifies landed-vs-closed. Its real deliverable is **beads mutations**, plus
+a report.
 
-- these items are ready / urgent
-- these three belong in one sprint
-- these two are duplicates
-- this P0 is too thin to act on
+What is missing is that **nothing invokes it programmatically**. `install.mjs`
+copies the agent file; the schema tests validate its output contract; no
+code dispatches it on a cadence or turns its proposed sprint sets into a
+launch. It is run ad hoc by a human, who then fills in the Launch Sprint
+form by hand.
 
-What it cannot do is **put that conclusion anywhere the supervisor will
-run**. A human reads the report, then fills in the Launch Sprint form.
-
-That human handoff is the whole gap.
+That handoff -- not the analysis -- is the gap.
 
 ```
 TODAY
@@ -90,15 +94,13 @@ of work.
 
 | Piece | Status | Meaning for this work |
 |---|---|---|
-| Backlog-groomer analysis | Shipped | Ranking, sprint sets, dedupe, quality bar. Keep it. Extend it. |
+| Backlog-groomer agent | Shipped, with full beads mutation authority | Ranking, sprint sets, dedupe, quality bar, landed-vs-closed. Keep it. Extend it only where queueing needs it. Nothing invokes it programmatically -- that is the gap. |
 | Supervisor launch API | Shipped as launch-now | We change it; we do not replace the supervisor. |
-| Reservation ledger | Shipped | Still "who is reserved RIGHT NOW". Queued work must NOT live here, or waiting would look like reserved. |
+| Reservation ledger | Shipped | Still "who is reserved RIGHT NOW". Queued work must NOT live here, or waiting would look like reserved -- and the ledger feeds live scope re-expansion per launch, so extra rows cost real work. |
 | Sprint history log | Shipped | Terminal events only (finished / crashed / released). Not a queue. |
-| Engine pause/resume | Shipped (`requestPause` / `requestResume`) | A sprint can park at a clean git/dolt boundary and release *fleet* member reservations. The supervisor still keeps the sprint on its ledger, so the member is not free for the *next queued sprint*. #410 point 4 is the wrapper that actually frees capacity into a queue. |
+| Engine pause/resume | Shipped (`requestPause` / `requestResume`) | A sprint parks at a clean git/dolt boundary and releases its *fleet* member reservations. But the supervisor still holds it on its own ledger, so the member is not free for the *next queued sprint*. #410 point 4 changes that -- and it is an invariant change, not a wrapper (see the #410 plan, section 3). |
 | Dashboard Pause button | Shipped | Proxies to the child's `/pause`. Does not enqueue. |
-
-Akhil's comment on #410 already said this: point 4 is a supervisor-queue
-wrapper around pause, not a rebuild of the engine primitive.
+| Dashboard Restart button | Shipped, destructive | Force-releases first, then prompts for anything it cannot recover. #410's relaunch work fixes this path rather than adding a parallel one. |
 
 ---
 
@@ -111,15 +113,39 @@ scope cut.
 Recommended stance (also written into each plan):
 
 1. Build **#410 first**, in two slices: (A) create/wait/order the queue,
-   (B) pause-into-queue + history/relaunch UI.
+   (B) pause-into-queue + relaunch/history.
 2. Build **#22 after A**, so the groomer can POST PENDING sprints.
 3. Groomer queues **work**, not machines (PENDING, `members: []`).
 4. Keep today's fail-fast 409 unless the caller opts into `queue: true`,
    so Launch and Restart do not silently start waiting.
 5. Do not auto-assign members until an operator turns that on (default off).
 6. Cap autonomous queueing (`maxQueued`, optional daily USD).
+7. Make the automatic grooming cadence **cheap by default**: a non-LLM
+   backlog-change check decides whether an agent pass is worth running at
+   all.
 
-If those six are wrong, it is cheaper to say so on the plan than after code.
+If those are wrong, it is cheaper to say so on the plan than after code.
+
+### Round 2 (2026-09-17)
+
+Akhil reviewed both plans on the PR. Every technical claim in that review
+was re-checked against the code and holds; all points are accepted. The
+material changes:
+
+- **#410 D6** is restated as an invariant change (the watchdog deliberately
+  never releases a paused sprint's reservation), with a concrete
+  restart-recovery design for paused sprints and an explicit decision on the
+  fleet-global reservation mirror.
+- **#410 D7** is rescoped to fix the existing Restart button rather than
+  build a second relaunch path.
+- **#410 D4** gains a dual-source poll, so a member freed outside this
+  supervisor cannot strand a waiting sprint.
+- **#22 G5** keys idempotency off sorted bead ids, not an LLM-invented
+  branch name.
+- **#22 G7** (new) has the groomer absorb newly-ready beads into an existing
+  queued sprint instead of proposing an overlapping new one.
+- **#22 G2** replaces the hourly full-agent timer with a tiered cadence
+  whose common case costs one `bd` call and zero tokens.
 
 ---
 
@@ -153,10 +179,12 @@ the #410 API. The analysis agent is not rewritten from scratch.
    resume the first one later (including on a different member) without
    resetting its budget.
 5. You can see the last few finished sprints and relaunch one without
-   retyping the form.
-6. After #22: the groomer can fill that queue on a timer, without duplicating
-   work that is already pending/waiting/running, and without queueing items
-   it already said were too thin to act on.
+   retyping the form -- and Restart stops prompting you for fields it should
+   already know.
+6. After #22: the groomer keeps that queue filled on its own, without
+   duplicating work already pending/waiting/running, without queueing items
+   it already said were too thin to act on, and without burning an agent
+   pass on a backlog that has not changed.
 
 ---
 
@@ -164,6 +192,10 @@ the #410 API. The analysis agent is not rewritten from scratch.
 
 On each issue plan's decision table: AGREE / DISAGREE / NEEDS-DISCUSSION.
 
-If DISAGREE, name the alternative. The plans stay PROPOSED until that
-table is clean. Implementation of #22 stays blocked until #410 slice A is
-agreed (and preferably merged).
+If DISAGREE, name the alternative. Both plans are currently **REVISED**
+(round 2), with each plan carrying a response table showing how round-1
+feedback was resolved. One open question needs an explicit answer: #410's
+D6a proposes a short spike (can a paused run persist-and-exit resumably?)
+before committing to the restart-recovery design.
+
+Implementation of #22 stays blocked until #410 Slice A is agreed.
