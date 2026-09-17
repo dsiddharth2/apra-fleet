@@ -435,7 +435,16 @@ test('waiting whose member is unregistered becomes blocked', async () => {
 test('kick is serialized: overlapping kicks run once more if dirty', async () => {
   // optional if cheap; otherwise skip and document single-flight in implementation
 });
-```
+
+// D4 round 2: the eligibility check is already dual-source (isUnionFree reads
+// the server's reservedBy as well as the ledger), but a member freed via that
+// second source fires no local event. Without a poll the waiting sprint
+// strands forever.
+test('waiting sprint starts when a member is freed only on the server side (no local event)', async () => {
+  // ledger EMPTY the whole time; listMembers first returns alice reservedBy 'other-sprint',
+  // then returns alice free. No watchdog release ever fires.
+  // first kick -> started null; second kick (poll tick) -> started the waiting sprint
+});
 
 - [ ] **Step 2: Run -- expect FAIL** (module missing)
 
@@ -461,6 +470,10 @@ export function isUnionFree(union, { ledgerEntries, membersList }) {
 Unregistered vs busy: if `known.size > 0 && !known.has(m)` the scheduler sets BLOCKED rather than treating as not-free (test above). Split: missing -> blocked; busy -> skip.
 
 Wire `createWatchdog({ ..., onCapacity: scheduler.kick })` and call it at the end of `releaseTerminalReservation` only when `released === true`. Also call `kick` at end of successful `launch` WAITING/PENDING paths? Not required for PENDING; for WAITING a kick on another sprint ending is the path. Call kick once at serve startup after readopt/reconcile so a WAITING record from disk can start if members are free.
+
+**D4 round 2 -- event PLUS poll.** The above triggers are all local: they fire on this supervisor's own watchdog release. But `isUnionFree` above is deliberately dual-source (it also rejects a member the fleet server reports as `reservedBy`), mirroring `defaultMemberOverlapGuard`. A member reserved through that second source and later freed there produces **no local event at all**, so an event-only scheduler leaves such a WAITING sprint stranded indefinitely.
+
+Fix: in addition to the event hooks, re-evaluate the WAITING set on the watchdog's existing periodic tick -- the watchdog already runs on an interval and already fetches what it needs, so this adds no new loop and no new timer. Implementation: after each watchdog sweep completes, call `scheduler.kick()` when `queue.hasWaiting()` is true. Gate on `hasWaiting()` so an empty queue costs one in-memory check rather than a `listMembers` round trip. `kick()`'s existing single-flight guard makes a poll overlapping an event-driven kick harmless.
 
 - [ ] **Step 4: Run**
 
